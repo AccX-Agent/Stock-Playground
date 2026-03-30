@@ -1,6 +1,6 @@
 """
-Mock A股数据生成器 V2 - 扩展版
-支持：更多股票、更多维度、更长历史、自定义配置
+Mock A股数据生成器 V3 - 时间推进版
+支持：更多股票、更多维度、时间推进、沪深300基准
 """
 import random
 import json
@@ -116,20 +116,27 @@ class EnhancedMockStockData:
         self,
         days: int = 252 * 5,  # 默认5年
         custom_stocks: Optional[List[StockConfig]] = None,
-        start_date: Optional[datetime] = None
+        start_date: Optional[datetime] = None,
+        generate_hs300: bool = True  # 是否生成沪深300基准数据
     ):
         """
         Args:
             days: 生成多少天的数据（默认5年）
             custom_stocks: 自定义股票列表，不传则使用默认50只
             start_date: 数据起始日期，默认从今天往前推
+            generate_hs300: 是否生成沪深300基准数据
         """
         self.days = days
         self.stocks = custom_stocks or self.DEFAULT_STOCKS
         self.start_date = start_date or (datetime.now() - timedelta(days=days*1.5))
         self.data: Dict[str, pd.DataFrame] = {}
         self._stock_info: Dict[str, Dict] = {}
+        self.hs300_data: Optional[pd.DataFrame] = None  # 沪深300数据
         self._generate_all()
+        
+        # 生成沪深300基准数据
+        if generate_hs300:
+            self._generate_hs300()
     
     def _generate_price_series(self, config: StockConfig) -> pd.DataFrame:
         """生成单只股票的完整数据（增强版）"""
@@ -222,6 +229,147 @@ class EnhancedMockStockData:
                 'market_cap': config.market_cap,
                 'pe_ratio': config.pe_ratio
             }
+    
+    def _generate_hs300(self):
+        """
+        生成沪深300指数基准数据
+        
+        使用几只大盘蓝筹股的平均收益来模拟沪深300走势
+        """
+        # 选择几只代表性大盘股作为沪深300成分
+        hs300_codes = [
+            "600519.SH",  # 贵州茅台
+            "600036.SH",  # 招商银行
+            "601398.SH",  # 工商银行
+            "601857.SH",  # 中国石油
+            "002594.SZ",  # 比亚迪
+            "300750.SZ",  # 宁德时代
+            "000858.SZ",  # 五粮液
+            "601088.SH",  # 中国神华
+            "600276.SH",  # 恒瑞医药
+            "000333.SZ",  # 美的集团
+        ]
+        
+        # 获取这些股票的日期序列（以第一个为准）
+        if not self.data:
+            return
+        
+        # 使用第一只股票的日期序列
+        first_code = list(self.data.keys())[0]
+        dates = self.data[first_code]['date'].tolist()
+        
+        # 计算这些股票的平均收益
+        hs300_prices = []
+        base_price = 3800.0  # 沪深300基准起始点
+        
+        for i, date in enumerate(dates):
+            daily_returns = []
+            valid_codes = 0
+            
+            for code in hs300_codes:
+                if code in self.data:
+                    df = self.data[code]
+                    if i < len(df):
+                        if i == 0:
+                            ret = 0
+                        else:
+                            prev_close = df.iloc[i-1]['close']
+                            curr_close = df.iloc[i]['close']
+                            if prev_close > 0:
+                                ret = (curr_close - prev_close) / prev_close
+                                daily_returns.append(ret)
+                                valid_codes += 1
+            
+            if daily_returns:
+                avg_return = sum(daily_returns) / len(daily_returns)
+            else:
+                avg_return = 0
+            
+            if i == 0:
+                price = base_price
+            else:
+                price = hs300_prices[-1] * (1 + avg_return)
+            
+            hs300_prices.append(price)
+        
+        # 生成OHLCV数据
+        df = pd.DataFrame({'date': dates, 'close': hs300_prices})
+        
+        # 根据收盘价生成开高低
+        df['prev_close'] = df['close'].shift(1)
+        df.loc[0, 'prev_close'] = base_price
+        
+        # 开盘价（前收盘 +/- 随机跳空）
+        gap = np.random.normal(0, 0.008, len(df))
+        df['open'] = df['prev_close'] * (1 + gap)
+        
+        # 最高价和最低价
+        intraday_volatility = np.abs(np.random.normal(0, 0.012, len(df)))
+        df['high'] = df[['open', 'close']].max(axis=1) * (1 + intraday_volatility)
+        df['low'] = df[['open', 'close']].min(axis=1) * (1 - intraday_volatility)
+        
+        # 成交量
+        base_volume = 1e9
+        volume_noise = np.random.lognormal(0, 0.3, len(df))
+        df['volume'] = (base_volume * volume_noise).astype(int)
+        df['volume'] = df['volume'].clip(lower=int(base_volume * 0.5))
+        
+        # 其他字段
+        df['amount'] = (df['close'] * df['volume'] / 1e8).round(2)
+        df['amplitude'] = ((df['high'] - df['low']) / df['low'] * 100).round(2)
+        df['change_pct'] = (df['close'] - df['open']) / df['open'] * 100
+        df['turnover'] = np.random.uniform(0.5, 2.0, len(df)).round(2)
+        df['pe_ratio'] = np.random.uniform(10, 18, len(df)).round(2)
+        df['market_cap'] = 0  # 指数没有市值
+        
+        df = df.drop(columns=['prev_close'])
+        
+        self.hs300_data = df
+    
+    def get_hs300_data(self, days: Optional[int] = None) -> pd.DataFrame:
+        """
+        获取沪深300历史数据
+        
+        Args:
+            days: 返回最近多少天的数据，None表示全部
+            
+        Returns:
+            沪深300数据DataFrame
+        """
+        if self.hs300_data is None:
+            return pd.DataFrame()
+        
+        if days:
+            return self.hs300_data.tail(days).copy()
+        return self.hs300_data.copy()
+    
+    def get_hs300_info(self) -> Dict:
+        """获取沪深300基本信息"""
+        if self.hs300_data is None or self.hs300_data.empty:
+            return {}
+        
+        latest = self.hs300_data.iloc[-1]
+        prev = self.hs300_data.iloc[-2] if len(self.hs300_data) > 1 else latest
+        
+        # 计算统计指标
+        returns = self.hs300_data['close'].pct_change().dropna()
+        
+        return {
+            'code': 'HS300',
+            'name': '沪深300指数',
+            'price': round(latest['close'], 2),
+            'change': round((latest['close'] - prev['close']) / prev['close'] * 100, 2),
+            'total_return': round((latest['close'] / self.hs300_data.iloc[0]['close'] - 1) * 100, 2),
+            'volatility_annual': round(returns.std() * np.sqrt(252) * 100, 2),
+            'max_drawdown': self._calc_max_drawdown(self.hs300_data['close'])
+        }
+    
+    def get_all_dates(self) -> List[str]:
+        """获取所有交易日日期列表"""
+        if not self.data:
+            return []
+        first_code = list(self.data.keys())[0]
+        return self.data[first_code]['date'].tolist()
     
     def get_stock_list(self, industry: Optional[str] = None) -> List[Dict]:
         """获取股票列表，支持按行业筛选"""

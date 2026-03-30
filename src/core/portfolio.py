@@ -1,11 +1,12 @@
 """
-交易核心模块
+交易核心模块 - V3 增强版
+支持：记录买入日期、配合时间推进系统
 """
 import json
 import os
 from datetime import datetime
 from typing import List, Dict, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 
 @dataclass
@@ -19,6 +20,7 @@ class Trade:
     amount: int
     total: float
     time: str
+    trade_date: str = ""  # 交易日期（用于时间推进系统）
     
     def to_dict(self):
         return asdict(self)
@@ -29,9 +31,11 @@ class Position:
     """持仓"""
     code: str
     name: str
-    amount: int          # 持仓数量
-    avg_cost: float      # 平均成本
-    current_price: float # 当前价格
+    amount: int              # 持仓数量
+    avg_cost: float          # 平均成本
+    current_price: float     # 当前价格
+    buy_date: str = ""       # 首次买入日期
+    buy_trades: List[Dict] = field(default_factory=list)  # 买入记录（记录每次买入的日期、价格、数量）
     
     @property
     def market_value(self) -> float:
@@ -59,12 +63,14 @@ class Position:
             'current_price': round(self.current_price, 2),
             'market_value': round(self.market_value, 2),
             'profit': round(self.profit, 2),
-            'profit_pct': round(self.profit_pct, 2)
+            'profit_pct': round(self.profit_pct, 2),
+            'buy_date': self.buy_date,
+            'buy_trades': self.buy_trades
         }
 
 
 class Portfolio:
-    """投资组合（账户）"""
+    """投资组合（账户）- V3 增强版"""
     
     def __init__(self, initial_cash: float = 1000000.0, data_dir: str = './data'):
         self.initial_cash = initial_cash
@@ -95,7 +101,9 @@ class Portfolio:
                         name=pos_data['name'],
                         amount=pos_data['amount'],
                         avg_cost=pos_data['avg_cost'],
-                        current_price=pos_data.get('current_price', pos_data['avg_cost'])
+                        current_price=pos_data.get('current_price', pos_data['avg_cost']),
+                        buy_date=pos_data.get('buy_date', ''),
+                        buy_trades=pos_data.get('buy_trades', [])
                     )
         
         # 加载交易记录
@@ -117,7 +125,9 @@ class Portfolio:
                     'name': pos.name,
                     'amount': pos.amount,
                     'avg_cost': pos.avg_cost,
-                    'current_price': pos.current_price
+                    'current_price': pos.current_price,
+                    'buy_date': pos.buy_date,
+                    'buy_trades': pos.buy_trades
                 }
                 for code, pos in self.positions.items()
             }
@@ -136,10 +146,17 @@ class Portfolio:
             if code in self.positions:
                 self.positions[code].current_price = price
     
-    def buy(self, code: str, name: str, price: float, amount: int) -> Dict:
+    def buy(self, code: str, name: str, price: float, amount: int, trade_date: str = None) -> Dict:
         """
         买入股票
         
+        Args:
+            code: 股票代码
+            name: 股票名称
+            price: 买入价格
+            amount: 买入数量
+            trade_date: 交易日期（用于时间推进系统，不传则使用当前时间）
+            
         Returns:
             {'success': bool, 'message': str}
         """
@@ -155,6 +172,9 @@ class Portfolio:
         # 执行买入
         self.cash -= total_cost
         
+        # 获取当前日期
+        current_date = trade_date or datetime.now().strftime('%Y-%m-%d')
+        
         if code in self.positions:
             # 加仓，更新平均成本
             pos = self.positions[code]
@@ -162,6 +182,12 @@ class Portfolio:
             pos.avg_cost = (pos.amount * pos.avg_cost + amount * price) / total_amount
             pos.amount = total_amount
             pos.current_price = price
+            # 记录买入
+            pos.buy_trades.append({
+                'date': current_date,
+                'price': price,
+                'amount': amount
+            })
         else:
             # 新建持仓
             self.positions[code] = Position(
@@ -169,7 +195,13 @@ class Portfolio:
                 name=name,
                 amount=amount,
                 avg_cost=price,
-                current_price=price
+                current_price=price,
+                buy_date=current_date,
+                buy_trades=[{
+                    'date': current_date,
+                    'price': price,
+                    'amount': amount
+                }]
             )
         
         # 记录交易
@@ -181,7 +213,8 @@ class Portfolio:
             price=price,
             amount=amount,
             total=total_cost,
-            time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            trade_date=current_date
         )
         self.trades.append(trade)
         self._save()
@@ -191,10 +224,17 @@ class Portfolio:
             'message': f'买入成功：{name}({code}) {amount}股 @ {price:.2f}，花费 {total_cost:.2f}'
         }
     
-    def sell(self, code: str, name: str, price: float, amount: int) -> Dict:
+    def sell(self, code: str, name: str, price: float, amount: int, trade_date: str = None) -> Dict:
         """
         卖出股票
         
+        Args:
+            code: 股票代码
+            name: 股票名称
+            price: 卖出价格
+            amount: 卖出数量
+            trade_date: 交易日期（用于时间推进系统）
+            
         Returns:
             {'success': bool, 'message': str}
         """
@@ -219,6 +259,7 @@ class Portfolio:
             del self.positions[code]
         
         # 记录交易
+        current_date = trade_date or datetime.now().strftime('%Y-%m-%d')
         trade = Trade(
             id=f"T{datetime.now().strftime('%Y%m%d%H%M%S')}",
             code=code,
@@ -227,7 +268,8 @@ class Portfolio:
             price=price,
             amount=amount,
             total=total_value,
-            time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            trade_date=current_date
         )
         self.trades.append(trade)
         self._save()
@@ -270,6 +312,21 @@ class Portfolio:
         """获取持仓列表"""
         return [pos.to_dict() for pos in self.positions.values()]
     
+    def get_position(self, code: str) -> Optional[Position]:
+        """获取单个持仓"""
+        return self.positions.get(code)
+    
     def get_trades(self, limit: int = 50) -> List[Dict]:
         """获取交易记录"""
         return [t.to_dict() for t in self.trades[-limit:]]
+    
+    def get_trades_by_code(self, code: str) -> List[Dict]:
+        """获取某只股票的交易记录"""
+        return [t.to_dict() for t in self.trades if t.code == code]
+    
+    def reset(self):
+        """重置账户"""
+        self.cash = self.initial_cash
+        self.positions = {}
+        self.trades = []
+        self._save()
