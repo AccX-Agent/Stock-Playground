@@ -73,6 +73,9 @@ current_date = tm.current_date
 # ==================== 顶部时间控制栏 ====================
 def render_time_header():
     """渲染顶部时间控制栏"""
+    # 从 time_manager 获取当前日期
+    current_date = tm.current_date
+    
     header_cols = st.columns([2, 1, 1, 1, 1])
     
     with header_cols[0]:
@@ -92,11 +95,11 @@ def render_time_header():
         if st.button("➡️ 下一交易日", type="primary", disabled=tm.is_last_date):
             if tm.advance():
                 # 日期推进后更新所有持仓价格
-                current_date = tm.current_date
+                new_date = tm.current_date
                 prices = {}
                 for code in pf.positions.keys():
                     if code in data.data:
-                        row = data.data[data.data['date'] == current_date]
+                        row = data.data[code][data.data[code]['date'] == new_date]
                         if not row.empty:
                             prices[code] = float(row['close'].iloc[0])
                 pf.update_prices(prices)
