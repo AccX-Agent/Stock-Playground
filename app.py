@@ -4,7 +4,8 @@ Streamlit Web 界面 V2 - 扩展版
 """
 import streamlit as st
 import sys
-sys.path.insert(0, '/root/.openclaw/workspace/projects/stock-playground/src')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 import pandas as pd
 import plotly.graph_objects as go

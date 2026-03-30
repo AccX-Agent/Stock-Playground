@@ -3,7 +3,8 @@ CLI 入口 V2 - 扩展版
 """
 import click
 import sys
-sys.path.insert(0, '/root/.openclaw/workspace/projects/stock-playground/src')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from data.mock_data import EnhancedMockStockData
 from core.portfolio import Portfolio
