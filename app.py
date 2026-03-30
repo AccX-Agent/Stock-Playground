@@ -4,17 +4,29 @@ Streamlit Web 界面 V2 - 扩展版
 """
 import streamlit as st
 import sys
+import os
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
+
+# 添加 src 到路径（兼容 Windows/Linux）
+CURRENT_DIR = Path(__file__).parent.resolve()
+SRC_DIR = CURRENT_DIR / 'src'
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from data.mock_data import EnhancedMockStockData
-from core.portfolio import Portfolio
-from core.backtest import BacktestEngine
-from strategies.examples import STRATEGIES
+try:
+    from data.mock_data import EnhancedMockStockData
+    from core.portfolio import Portfolio
+    from core.backtest import BacktestEngine
+    from strategies.examples import STRATEGIES
+except ImportError as e:
+    st.error(f"导入模块失败: {e}")
+    st.error(f"当前工作目录: {os.getcwd()}")
+    st.error(f"sys.path: {sys.path}")
+    st.stop()
 
 # 页面配置
 st.set_page_config(
@@ -320,7 +332,7 @@ elif page == "💰 模拟交易":
                 - 持仓: {pos['amount']} 股
                 - 成本: ¥{pos['avg_cost']}
                 - 现价: ¥{pos['current_price']}
-                - 盈亏: {pos['profit']:+.2f} ({pos['profit_pct']:+.2f}%)
+                - 盈亏: {pos['profit']:+,.2f} ({pos['profit_pct']:+.2f}%)
                 """)
         else:
             st.info("暂无持仓")

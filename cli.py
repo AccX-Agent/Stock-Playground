@@ -3,13 +3,26 @@ CLI 入口 V2 - 扩展版
 """
 import click
 import sys
+import os
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
-from data.mock_data import EnhancedMockStockData
-from core.portfolio import Portfolio
-from core.backtest import BacktestEngine
-from strategies.examples import STRATEGIES
+# 添加 src 到路径（兼容 Windows/Linux）
+CURRENT_DIR = Path(__file__).parent.resolve()
+SRC_DIR = CURRENT_DIR / 'src'
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+try:
+    from data.mock_data import EnhancedMockStockData
+    from core.portfolio import Portfolio
+    from core.backtest import BacktestEngine
+    from strategies.examples import STRATEGIES
+except ImportError as e:
+    print(f"❌ 导入模块失败: {e}")
+    print(f"当前工作目录: {os.getcwd()}")
+    print(f"尝试添加的路径: {SRC_DIR}")
+    print(f"sys.path: {sys.path}")
+    sys.exit(1)
 
 
 @click.group()
