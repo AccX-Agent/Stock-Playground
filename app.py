@@ -7,25 +7,39 @@ import sys
 import os
 from pathlib import Path
 
-# 添加 src 到路径（兼容 Windows/Linux）
-CURRENT_DIR = Path(__file__).parent.resolve()
-SRC_DIR = CURRENT_DIR / 'src'
+# 获取项目根目录（兼容 Windows/Linux）
+PROJECT_ROOT = Path(__file__).parent.resolve()
+SRC_DIR = PROJECT_ROOT / 'src'
+
+# 确保 src 在路径中
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+
+# Windows 兼容：切换工作目录到项目根目录
+os.chdir(PROJECT_ROOT)
 
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+# 尝试导入，失败时给出详细错误
 try:
-    from data.mock_data import EnhancedMockStockData
+    from data.mock_data import EnhancedMockStockData, StockConfig, Industry
     from core.portfolio import Portfolio
     from core.backtest import BacktestEngine
     from strategies.examples import STRATEGIES
 except ImportError as e:
-    st.error(f"导入模块失败: {e}")
-    st.error(f"当前工作目录: {os.getcwd()}")
-    st.error(f"sys.path: {sys.path}")
+    st.error(f"❌ 导入模块失败: {e}")
+    st.error(f"📁 项目根目录: {PROJECT_ROOT}")
+    st.error(f"📁 src 目录: {SRC_DIR}")
+    st.error(f"📁 当前工作目录: {os.getcwd()}")
+    st.error(f"📋 sys.path: {sys.path}")
+    
+    # 检查文件是否存在
+    mock_data_file = SRC_DIR / 'data' / 'mock_data.py'
+    st.error(f"📄 mock_data.py 存在: {mock_data_file.exists()}")
+    if mock_data_file.exists():
+        st.error(f"📄 mock_data.py 路径: {mock_data_file}")
     st.stop()
 
 # 页面配置
