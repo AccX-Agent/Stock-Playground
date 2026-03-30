@@ -315,7 +315,9 @@ elif page == "🔍 个股详情":
                 freq = st.selectbox("周期", ["D", "W", "M"], 
                                   format_func=lambda x: {"D": "日线", "W": "周线", "M": "月线"}[x])
             with kline_cols[1]:
-                kline_days = st.slider("显示K线数", 20, min(252, len(filtered)), min(60, len(filtered)))
+                max_days = max(20, min(252, len(filtered)))
+                default_days = min(60, max_days)
+                kline_days = st.slider("显示K线数", 20, max_days, default_days)
             
             # 获取K线数据
             kline = filtered.tail(kline_days).copy()
