@@ -319,6 +319,7 @@ class EnhancedMockStockData:
         config = self._stock_info[code]
         df = self.data[code]
         latest = df.iloc[-1]
+        prev = df.iloc[-2] if len(df) > 1 else latest
         
         # 计算更多统计指标
         returns = df['close'].pct_change().dropna()
@@ -335,6 +336,7 @@ class EnhancedMockStockData:
             'pe_ratio': round(latest['pe_ratio'], 2),
             'market_cap': round(latest['market_cap'], 2),
             'amplitude': round(latest['amplitude'], 2),
+            'change': round((latest['close'] - prev['close']) / prev['close'] * 100, 2) if len(df) > 1 else 0,
             'history': df,
             # 统计指标
             'total_return': round((latest['close'] / df.iloc[0]['close'] - 1) * 100, 2),

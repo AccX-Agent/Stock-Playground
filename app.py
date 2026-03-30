@@ -151,21 +151,30 @@ elif page == "📊 行情中心":
     
     # 显示表格
     df = pd.DataFrame(stocks)
-    df['涨跌'] = df['change'].apply(lambda x: f"{'🟢' if x >= 0 else '🔴'} {x:+.2f}%")
-    df['成交额'] = df['amount'].apply(lambda x: f"{x:.2f}亿")
-    df['市值'] = df['market_cap'].apply(lambda x: f"{x:.0f}亿")
-    df['PE'] = df['pe_ratio']
     
-    display_cols = ['code', 'name', 'industry', 'price', '涨跌', 
-                   '成交额', '换手率', 'PE', '市值']
-    rename_map = {
-        'code': '代码', 'name': '名称', 'industry': '行业',
-        'price': '现价', 'turnover': '换手率'
-    }
+    # 重命名列为中文
+    df_display = df.rename(columns={
+        'code': '代码',
+        'name': '名称',
+        'industry': '行业',
+        'price': '现价',
+        'change': '涨跌',
+        'amount': '成交额',
+        'turnover': '换手率',
+        'pe_ratio': 'PE',
+        'market_cap': '市值'
+    })
+    
+    # 格式化显示
+    df_display['涨跌'] = df['change'].apply(lambda x: f"{'🟢' if x >= 0 else '🔴'} {x:+.2f}%")
+    df_display['成交额'] = df['amount'].apply(lambda x: f"{x:.2f}亿")
+    df_display['市值'] = df['market_cap'].apply(lambda x: f"{x:.0f}亿")
+    
+    display_cols = ['代码', '名称', '行业', '现价', '涨跌', '成交额', '换手率', 'PE', '市值']
     
     st.dataframe(
-        df[display_cols].rename(columns=rename_map),
-        use_container_width=True,
+        df_display[display_cols],
+        width='stretch',
         height=600
     )
     
