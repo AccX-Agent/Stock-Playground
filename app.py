@@ -210,11 +210,15 @@ elif page == "📊 行情中心":
             # 获取当前日期及之前的数据
             mask = df['date'] <= current_date
             filtered = df[mask]
-            if len(filtered) >= 2:
+            if len(filtered) >= 2:  # 修复：确保至少有两行数据
                 latest = filtered.iloc[-1]
                 prev = filtered.iloc[-2]
                 stock['price'] = round(latest['close'], 2)
                 stock['change'] = round((latest['close'] - prev['close']) / prev['close'] * 100, 2)
+            elif len(filtered) == 1:  # 只有一行数据时，涨跌幅为0
+                latest = filtered.iloc[-1]
+                stock['price'] = round(latest['close'], 2)
+                stock['change'] = 0.0
     
     # 排序
     sort_map = {

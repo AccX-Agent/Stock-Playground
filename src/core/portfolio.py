@@ -90,55 +90,65 @@ class Portfolio:
         """从文件加载账户数据"""
         os.makedirs(self.data_dir, exist_ok=True)
         
-        # 加载持仓
-        if os.path.exists(self._portfolio_file()):
-            with open(self._portfolio_file(), 'r') as f:
-                data = json.load(f)
-                self.cash = data.get('cash', self.initial_cash)
-                for code, pos_data in data.get('positions', {}).items():
-                    self.positions[code] = Position(
-                        code=pos_data['code'],
-                        name=pos_data['name'],
-                        amount=pos_data['amount'],
-                        avg_cost=pos_data['avg_cost'],
-                        current_price=pos_data.get('current_price', pos_data['avg_cost']),
-                        buy_date=pos_data.get('buy_date', ''),
-                        buy_trades=pos_data.get('buy_trades', [])
-                    )
-        
-        # 加载交易记录
-        if os.path.exists(self._trades_file()):
-            with open(self._trades_file(), 'r') as f:
-                trades_data = json.load(f)
-                self.trades = [Trade(**t) for t in trades_data]
+        try:
+            # 加载持仓
+            if os.path.exists(self._portfolio_file()):
+                with open(self._portfolio_file(), 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.cash = data.get('cash', self.initial_cash)
+                    for code, pos_data in data.get('positions', {}).items():
+                        self.positions[code] = Position(
+                            code=pos_data['code'],
+                            name=pos_data['name'],
+                            amount=pos_data['amount'],
+                            avg_cost=pos_data['avg_cost'],
+                            current_price=pos_data.get('current_price', pos_data['avg_cost']),
+                            buy_date=pos_data.get('buy_date', ''),
+                            buy_trades=pos_data.get('buy_trades', [])
+                        )
+            
+            # 加载交易记录
+            if os.path.exists(self._trades_file()):
+                with open(self._trades_file(), 'r', encoding='utf-8') as f:
+                    trades_data = json.load(f)
+                    self.trades = [Trade(**t) for t in trades_data]
+        except (json.JSONDecodeError, IOError, KeyError, TypeError) as e:
+            # 数据文件损坏或读取失败，使用默认值
+            print(f"警告：加载账户数据失败 ({e})，使用初始状态")
+            self.cash = self.initial_cash
+            self.positions = {}
+            self.trades = []
     
     def _save(self):
         """保存账户数据到文件"""
         os.makedirs(self.data_dir, exist_ok=True)
         
-        # 保存持仓
-        portfolio_data = {
-            'cash': self.cash,
-            'positions': {
-                code: {
-                    'code': pos.code,
-                    'name': pos.name,
-                    'amount': pos.amount,
-                    'avg_cost': pos.avg_cost,
-                    'current_price': pos.current_price,
-                    'buy_date': pos.buy_date,
-                    'buy_trades': pos.buy_trades
+        try:
+            # 保存持仓
+            portfolio_data = {
+                'cash': self.cash,
+                'positions': {
+                    code: {
+                        'code': pos.code,
+                        'name': pos.name,
+                        'amount': pos.amount,
+                        'avg_cost': pos.avg_cost,
+                        'current_price': pos.current_price,
+                        'buy_date': pos.buy_date,
+                        'buy_trades': pos.buy_trades
+                    }
+                    for code, pos in self.positions.items()
                 }
-                for code, pos in self.positions.items()
             }
-        }
-        with open(self._portfolio_file(), 'w') as f:
-            json.dump(portfolio_data, f, indent=2)
-        
-        # 保存交易记录
-        trades_data = [t.to_dict() for t in self.trades]
-        with open(self._trades_file(), 'w') as f:
-            json.dump(trades_data, f, indent=2)
+            with open(self._portfolio_file(), 'w', encoding='utf-8') as f:
+                json.dump(portfolio_data, f, indent=2, ensure_ascii=False)
+            
+            # 保存交易记录
+            trades_data = [t.to_dict() for t in self.trades]
+            with open(self._trades_file(), 'w', encoding='utf-8') as f:
+                json.dump(trades_data, f, indent=2, ensure_ascii=False)
+        except IOError as e:
+            print(f"错误：保存账户数据失败 ({e})")
     
     def update_prices(self, prices: Dict[str, float]):
         """更新持仓的最新价格"""

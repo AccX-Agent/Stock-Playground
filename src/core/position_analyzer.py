@@ -155,15 +155,16 @@ class PositionAnalyzer:
                 date_mask = self.hs300_data['date'] == row['date']
                 if date_mask.any():
                     hs300_row = self.hs300_data[date_mask].iloc[0]
-                    hs300_start = self.hs300_data[
+                    # 修复：添加空值检查，避免 .iloc[0] 报错
+                    hs300_period_data = self.hs300_data[
                         (self.hs300_data['date'] >= buy_dt) & 
                         (self.hs300_data['date'] <= row['date'])
-                    ]['close'].iloc[0] if not self.hs300_data[
-                        (self.hs300_data['date'] >= buy_dt) & 
-                        (self.hs300_data['date'] <= row['date'])
-                    ].empty else None
-                    if hs300_start is not None:
+                    ]
+                    if not hs300_period_data.empty and len(hs300_period_data) > 0:
+                        hs300_start = hs300_period_data['close'].iloc[0]
                         hs300_value = (hs300_row['close'] - hs300_start) / hs300_start * 100
+                    else:
+                        hs300_value = 0.0
             
             daily_returns.append({
                 'date': row['date'].strftime('%Y-%m-%d'),
